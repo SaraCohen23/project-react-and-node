@@ -1,24 +1,30 @@
 const _ = require('lodash');
 
 const Accessory=require("../Modules/AccessoryModule")
-const Renters = require('./path/to/your/renterModel');
+const Renters = require("../Modules/RenterModule");
+const Rent=require("../Modules/RentModule");
 async function createAccessory(req, res)  {
     try {
-        const accessory = new Accessory(req.body);
+        const accessory = new Accessory(req.body);       
         await accessory.save();
-        res.status(201).send({ id:accessory._id });
+        res.status(201).send({accessory:accessory});
     } catch (error) {
         res.status(400).send(error.message);
     }
 }
-async function deleteAccessory(req,res){
+async function deleteAccessory(req, res) {
     try {
-        let { id } = req.params
-        let accessory  =await Accessory .findByIdAndDelete(id)
-        if (!accessory ) {
-            res.status(404).send(null);
-         }
-         else res.status(204).send()
+        let { id } = req.params;
+        let accessory = await Accessory.findByIdAndDelete(id);
+        if (!accessory) {
+            return res.status(404).send(null);
+        }
+        await Renters.updateMany(
+            { 'renterAccessory.accessory': id },
+            { $pull: { renterAccessory: { accessory: id } } }
+        );
+
+        res.status(204).send();
     } catch (error) {
         res.status(500).send(error.message);
     }
@@ -35,6 +41,28 @@ async function getAccessoryByGallery(req,res){
         res.status(500).send(error.message);
     }
 }
+
+async function getAccessoryRentersDetails(req, res) {
+    try {
+        const { id } = req.params; 
+        const accessory = await Accessory.findById(id).populate('accessoryRenter.renter'); 
+
+        if (!accessory) {
+            return res.status(404).send(null); 
+        } else {
+            const rentersDetails = accessory.accessoryRenter.map(r => ({
+                name: r.renter.renterName,
+                address: r.renter.renterAddress,
+                prices: r.renter.renterAccessory.map(a => a.price) 
+            }));
+            return res.status(200).send(rentersDetails);
+        }
+    } catch (error) {
+        return res.status(500).send(error.message); 
+    }
+}
+
+
 async function updateAccessory(req, res) {
     try {
         let { id } = req.params;
@@ -49,45 +77,44 @@ async function updateAccessory(req, res) {
         res.status(500).send(error.message);
     }
 }
+async function deleteAccessoryFromRenter(req, res) {
+    let { renterid } = req.params;
+    let accessoryid = req.body.accessoryid;
 
-async function addRent(req, res) {
     try {
-        const { accessoryId, date, quantity } = req.body; 
-        const accessory = await AccessoryModule.findById(accessoryId);
-        if (!accessory) {
-            return res.status(404).json({ message: 'Accessory not found' });
+        const activeRentals = await Rent.findOne({
+            rentUser: renterid,
+            rentAccessories: accessoryid,
+            rentReturnDate: { $exists: false } 
+        });
+
+        if (activeRentals) {
+            return res.status(400).send("Cannot delete the accessory while it is still rented.");
         }
 
-        const existingRent = accessory.accessoryRent.find(rent => rent.date.toISOString() === new Date(date).toISOString());
-        if (existingRent) {
-            return res.status(400).json({ message: 'Rent for this date already exists' });
+        await Renters.updateOne(
+            { _id: renterid },
+            { $pull: { renterAccessory: { accessory: accessoryid } } }
+        );
+        await Accessory.updateOne(
+            { _id: accessoryid },
+            { $pull: { renters: renterid } } 
+        );
+
+        const renterCount = await Renters.countDocuments({ 'renterAccessory.accessory': accessoryid });
+
+        if (renterCount === 0) {
+           
+            await Accessory.findByIdAndDelete(accessoryid);
         }
-        accessory.accessoryRent.push({ date, quantity });
-        await accessory.save();
-        return res.status(200).json({ message: 'Rent added successfully', accessory });
+
+        res.status(204).send();
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Server error' });
+        res.status(500).send(error.message);
     }
 }
 
-  
 
-async function addRenter(req, res) {
-    const { accessoryId, renterData } = req.body; 
-    try {   
-     const accessory = await Accessories.findById(accessoryId);
-        if (!accessory) {
-            return res.status(404).json({ message: 'Accessory not found' });
-        }
-        const newRenter = new Renters(renterData);
-        await newRenter.save();
-        accessory.accessoryRenter.push({ renter: newRenter._id });
-        await accessory.save();
-        return res.status(200).json({ message: 'Renter added successfully', accessory });
-    } catch (error) {
-        return res.status(500).json({ message: 'Error adding renter', error });
-    }
 
-}
-module.exports={createAccessory,deleteAccessory,getAccessoryByGallery,updateAccessory,addRent,addRenter}
+
+module.exports={createAccessory,deleteAccessory,getAccessoryByGallery,updateAccessory,deleteAccessoryFromRenter,getAccessoryRentersDetails}

@@ -1,15 +1,11 @@
 const express = require("express")
 const router = express.Router()
-const { createPhotography,getAllPhotography,addImage,addResponse,getPhotographyByName} = require("../Controllers/PhotographyController")
+const { createRenter,getRenterById,updatePersonalDetails,addAccessory} = require("../Controllers/RenterController")
 
-router.post("/createPhotography",createPhotography)
-router.get("/getAllPhotography",getAllPhotography)
-router.get("/getPhotographyByName/:photographyName",getPhotographyByName)
-//צריך לקבל בbody את ההמלצה
-router.put("/addResponse/:photographyName",addResponse)
-//צריך לקבל בbody תמונה
-router.put("/addImage/:photographyName",addImage)
-//מקבל מיל טלפון וכתובת בbody
-router.put("/updatePersonalDetaild/:_id")
-
+router.post("/createRenter",createRenter)
+router.get("/getRenterById/:_id",getRenterById)
+//מקבל בbody 
+router.put("/updatePersonalDetails/:_id",updatePersonalDetails)
+//מקבל בbody פרטים ליצירת acvessory
+router.put("/addAccessory/renerId",addAccessory)
 module.exports = router

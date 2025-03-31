@@ -1,93 +1,110 @@
-const _ = require('lodash');
+const Order = require("../Modules/OrderModule");
+const User = require("../Modules/UserModule");
+const Photography = require("../Modules/PhotographyModule");
 
-const Accessory=require("../Modules/AccessoryModule")
-const Renters = require('./path/to/your/renterModel');
-async function createAccessory(req, res)  {
+// פונקציה לבדוק אם הצלמת פנויה
+async function isPhotographyAvailable(photographyId, orderDate) {
+    const existingOrders = await Order.find({
+        orderPhotography: photographyId,
+        orderDate: orderDate
+    });
+    return existingOrders.length === 0; // אם אין הזמנות, הצלמת פנויה
+}
+
+// פונקציה ליצירת הזמנה
+async function createOrder(req, res) {
     try {
-        const accessory = new Accessory(req.body);
-        await accessory.save();
-        res.status(201).send({ id:accessory._id });
+        const isAvailable = await isPhotographyAvailable(req.body.orderPhotography, req.body.orderDate);
+        if (!isAvailable) {
+            return res.status(400).send("הצלמת לא פנויה בתאריך זה.");
+        }
+        let order = new Order({
+            orderDate: req.body.orderDate,
+            orderUser: req.body.orderUser,
+            orderPhotography: req.body.orderPhotography
+        });
+        await order.save();
+        // הוספת ההזמנה למשתמש
+        await User.findByIdAndUpdate(req.body.orderUser, { $push: { userOrders: order._id } });
+        // הוספת ההזמנה לצילום
+        await Photography.findByIdAndUpdate(req.body.orderPhotography, { $push: { photographyOrders: order._id } });
+        res.status(201).send(order);
     } catch (error) {
         res.status(400).send(error.message);
     }
 }
-async function deleteAccessory(req,res){
+
+// פונקציה למחיקת הזמנה
+async function deleteOrder(req, res) {
     try {
-        let { id } = req.params
-        let accessory  =await Accessory .findByIdAndDelete(id)
-        if (!accessory ) {
-            res.status(404).send(null);
-         }
-         else res.status(204).send()
+        const order = await Order.findByIdAndDelete(req.params.id);
+        if (!order) {
+            return res.status(404).send("ההזמנה לא נמצאה.");
+        }       
+        // הסרת ההזמנה מהמשתמש
+        await User.findByIdAndUpdate(order.orderUser, { $pull: { userOrders: order._id } });
+        res.status(200).send("ההזמנה נמחקה בהצלחה.");
     } catch (error) {
-        res.status(500).send(error.message);
+        res.status(400).send(error.message);
     }
 }
-async function getAccessoryByGallery(req,res){
+
+// פונקציה לקבלת הזמנות לפי צילום
+async function getOrdersByPhotography(req, res) {
     try {
-        const {gallery} = req.params;
-        let accessory= await Accessory.find({gallery:gallery})
-        if (!accessory) {
-           res.status(404).send(null);
-        }
-        else res.status(200).send(accessory);
+        const orders = await Order.find({ orderPhotography: req.params.photographyId });
+        res.status(200).send(orders);
     } catch (error) {
-        res.status(500).send(error.message);
+        res.status(400).send(error.message);
     }
 }
-async function updateAccessory(req, res) {
+
+// פונקציה לעדכון פרטי צילום בהזמנה
+async function updatePhotography(req, res) {
     try {
-        let { id } = req.params;
-        let accessory = await Accessory.findById(id);
-        if (!accessory) {
-            return res.status(404).send(null);
+        const isAvailable = await isPhotographyAvailable(req.body.orderPhotography, req.body.orderDate);
+        if (!isAvailable) {
+            return res.status(400).send("הצלמת לא פנויה בתאריך זה.");
         }
-        _.assign(accessory, req.body);
-        await accessory.save(); 
-        res.status(200).send(accessory);
+
+        const order = await Order.findByIdAndUpdate(req.params.id, { orderPhotography: req.body.orderPhotography }, { new: true });
+        if (!order) {
+            return res.status(404).send("ההזמנה לא נמצאה.");
+        }
+        res.status(200).send(order);
     } catch (error) {
-        res.status(500).send(error.message);
+        res.status(400).send(error.message);
     }
 }
 
-async function addRent(req, res) {
+// פונקציה לקבלת הזמנות לפי משתמש
+async function getOrdersByUser(req, res) {
     try {
-        const { accessoryId, date, quantity } = req.body; 
-        const accessory = await AccessoryModule.findById(accessoryId);
-        if (!accessory) {
-            return res.status(404).json({ message: 'Accessory not found' });
-        }
-
-        const existingRent = accessory.accessoryRent.find(rent => rent.date.toISOString() === new Date(date).toISOString());
-        if (existingRent) {
-            return res.status(400).json({ message: 'Rent for this date already exists' });
-        }
-        accessory.accessoryRent.push({ date, quantity });
-        await accessory.save();
-        return res.status(200).json({ message: 'Rent added successfully', accessory });
+        const orders = await Order.find({ orderUser: req.params.userId });
+        res.status(200).send(orders);
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Server error' });
+        res.status(400).send(error.message);
     }
 }
 
-  
-
-async function addRenter(req, res) {
-    const { accessoryId, renterData } = req.body; 
-    try {   
-     const accessory = await Accessories.findById(accessoryId);
-        if (!accessory) {
-            return res.status(404).json({ message: 'Accessory not found' });
+// פונקציה לעדכון תאריך ההזמנה
+async function updateDate(req, res) {
+    try {
+        const order = await Order.findByIdAndUpdate(req.params.id, { orderDate: req.body.orderDate }, { new: true });
+        if (!order) {
+            return res.status(404).send("ההזמנה לא נמצאה.");
         }
-        const newRenter = new Renters(renterData);
-        await newRenter.save();
-        accessory.accessoryRenter.push({ renter: newRenter._id });
-        await accessory.save();
-        return res.status(200).json({ message: 'Renter added successfully', accessory });
+        res.status(200).send(order);
     } catch (error) {
-        return res.status(500).json({ message: 'Error adding renter', error });
+        res.status(400).send(error.message);
     }
-
 }
-module.exports={createAccessory,deleteAccessory,getAccessoryByGallery,updateAccessory,addRent,addRenter}
+
+module.exports = {
+    createOrder,
+    deleteOrder,
+    getOrdersByPhotography,
+    updatePhotography,
+    getOrdersByUser,
+    updateDate
+};

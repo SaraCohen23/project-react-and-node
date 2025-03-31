@@ -10,7 +10,7 @@ const AccessoryModule= mongoose.Schema({
     accessoryGallery:{type:String},
     accessoryRent:[{
         date: { type:Date, required: true }, 
-        quantity: { type: Number, required: true } , 
+        renter:{ type: mongoose.Schema.Types.ObjectId, ref: 'Renters'}
     }],
    
 });
