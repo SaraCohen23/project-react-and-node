@@ -26,7 +26,7 @@ app.listen(8080, ()=>{
 })
 
 app.use("/Accessory", AccessoryRouter);
-app.use("/Order", categoryRouter);
+app.use("/Order", orderRouter);
 app.use("/Photography", photographyRouter);
 app.use("/Rent", rentRouter);
 app.use("/Renter", renterRouter);
