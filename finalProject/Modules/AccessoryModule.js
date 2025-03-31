@@ -3,11 +3,14 @@ const mongoose = require("mongoose");
 const AccessoryModule= mongoose.Schema({
    
     accessoryName: { type: String },
-    accessoryImage:{type:string},
+    accessoryImage:{type:String},
+    accessoryRenter:[{
+        renter:{ type: mongoose.Schema.Types.ObjectId, ref: 'Renters'}
+    }],
+    accessoryGallery:{type:String},
     accessoryRent:[{
         date: { type:Date, required: true }, 
-        galery: { type: String, required: true } ,
-        quantity: { type: Number, required: true } 
+        quantity: { type: Number, required: true } , 
     }],
    
 });
